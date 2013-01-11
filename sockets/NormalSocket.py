@@ -5,7 +5,6 @@ Created on 23/12/2012
 '''
 import socket
 from sockets.BaseSocket import BaseSocket, SocketType, SocketConfig
-from config import Configuration
 
 class NormalSocket(BaseSocket):
     '''Just a implementation to a normal socket. Used as base for the all others sockets'''
