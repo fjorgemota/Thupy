@@ -1,2 +1,1 @@
-import BasicClass
-__all__ = [BasicClass]
+__all__ = ["BasicClass2", "PackageManager", "MicroThread", "functools"]
