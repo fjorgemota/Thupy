@@ -29,5 +29,8 @@ pip-log.txt
 #Jython Cache Files
 *.class
 
+#MicroThread cache
+*/cache/*
+
 #Mr Developer
 .mr.developer.cfg
