@@ -23,5 +23,11 @@ pip-log.txt
 #Translations
 *.mo
 
+#PyPy Cache
+*/__pycache__/*
+
+#Jython Cache Files
+*.class
+
 #Mr Developer
 .mr.developer.cfg
