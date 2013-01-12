@@ -1139,8 +1139,8 @@ def microThreadDecorator(fn):
         autoStart = kwargs.pop("microThread_autoStart", True)
         m = MicroThread(fn, *args, **kwargs)
         if async:
-            if autoStart:
-                m.start()
+            if autoStart: #If it can auto-start!
+                m.start()#It auto start!
             return m
         else:
             m.start()
