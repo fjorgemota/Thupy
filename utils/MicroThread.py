@@ -854,10 +854,15 @@ class MicroThreadPoll:
             getTask = MicroThreadPoll.tasks.get
             taskDone = MicroThreadPoll.tasks.task_done
             putTask = MicroThreadPoll.tasks.put_nowait
+            n = 0
             while not poll.stopFlag:
                 poll.suspendFlag.wait() #Wait if suspended
                 task = getTask() #Get an task from the queue, blocking if needed
                 if task in MicroThreadPoll.to_remove: #Detect if it's in the iterator
+                    if n > 3:
+                        MicroThreadPoll.to_remove = list(MicroThreadPoll.to_remove) #It need to be transformed in a list why::::It can slow the performance..=P    
+                        n = 0
+                    n += 1
                     MicroThreadPoll.to_remove = (a_task for a_task in MicroThreadPoll.to_remove if a_task !=task) #Generator Expressions <3
                     continue #If removed, this cannot be executed!
                 taskDone() #If anyone need to know when the tasks terminated xD
@@ -1137,13 +1142,13 @@ def microThreadDecorator(fn):
             return fn(*args, **kwargs)
         async = kwargs.pop("microThread_async", True) #Defines if it's async..
         autoStart = kwargs.pop("microThread_autoStart", True)
-        m = MicroThread(fn, *args, **kwargs)
+        m = MicroThread(fn, *args, **kwargs) #Create a MicroThread..
         if async:
             if autoStart: #If it can auto-start!
                 m.start()#It auto start!
             return m
         else:
-            m.start()
+            m.start() #Start if not async (it need to be started to await a result)
             return m.waitResult() #Await a result 
     microThread.__name__ = fn.__name__
     microThread.oldFunc = fn
