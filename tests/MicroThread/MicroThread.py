@@ -1,9 +1,9 @@
-import sys, os, traceback
+import sys, os
 sys.path.insert(0, os.path.realpath(os.path.join(os.getcwd(), "..","..")))
 #from utils.PackageManager import PackageManager
 #PackageManager.importPackage("pyximport","cython") #Import the package pyximport that's installed with Cython
 #pyximport.install(pyimport=True, inplace=True, build_in_temp=False) #There's now in the global space, i await
-import random, time, traceback, logging, Queue, os, inspect
+import random, time, traceback, logging, Queue, os, inspect, threading
 #logging.basicConfig(level=logging.INFO)
 from utils.MicroThread import MicroThread, MicroThreadPoll, microThreadDecorator, OrderedPrint
 try: 
@@ -37,13 +37,6 @@ try:
     import cProfile as profile
 except:
     import profile
-def test2(a=None,*args,**kwargs):
-    return a.upper()
-#test2.microThread_parseFuncs = False
-def test3():
-    return "Test 3!"
-def test(a,*args,**kwargs):
-    return "Teste"
 if cython:
     @cython.locals(n=cython.int, resultado=cython.longlong, num=cython.int)
     @cython.returns(cython.longlong)
@@ -74,25 +67,24 @@ else:
     @microThreadDecorator
     def factorial(n):
         return reduce(factorialMult,xrange(1, n+1))
-#@cython.locals(init_personal_time=cython.int, final_personal_time=cython.int, _resp=list, inline=cython.bint, msg=str)
-#@cython.returns(dict)
+def dec(fn):
+    def wrapper(*args, **kwargs):
+        print "RISOS"
+        r = fn(*args, **kwargs)
+        print ":D"
+        print r
+        return r
+    wrapper.__name__ = fn.__name__
+    for attr in dir(fn):
+        if "microThread" not in attr:
+            continue
+        setattr(wrapper, attr, getattr(fn, attr))
+    return wrapper
+__builtins__.dec = dec
+@dec
 @microThreadDecorator
 def page():
     return 'HTTP/1.1 200\r\nContent-type:text/html\r\n\r\nHello, world'
-#    init_personal_time = time.time()
-#    _resp = ["HTTP/1.1 200\r\nContent-Type: text/html\r\n\r\n"]
-#    _resp.extend("Hello World")
-#    final_personal_time = time.time()
-#    if inline:
-#        msg = "Processado (inline) em "+str(final_personal_time-init_personal_time)+" segundos"
-#    else:
-#        msg = "Processado em "+str(final_personal_time-init_personal_time)+" segundos"
-#    test2(msg,rs='oi',aheuahue=test("risos", lol='risos', fala='GALERA'))
-#    #m = test2(msg, lol=test(a=None,b='FALA GALERA'), rs=test3())
-#    return {"resp":_resp,"time":final_personal_time-init_personal_time}
-def callback(microthread, *args):
-    OrderedPrint.instance.write("A Micro-Thread foi processada em %s segundos\n"%str(microthread.getTimeRunning()))
-callback.microThread_enable = False
 def microThreadCompareBenchmark(cb, num_count=100, parseFuncs=False, *args,**kwargs):
     if not getattr(cb, "microThreadDecorated", False):
         raise Exception("Callback not supported. Decorate it with @microThreadDecorator :~~")
