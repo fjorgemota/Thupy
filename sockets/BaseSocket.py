@@ -46,13 +46,10 @@ def BaseAsyncSocket(BaseSocket, abstract):
         '''Handles a write event emited by the listener'''
     @abstractFn
     def handle_read(self):
-        '''Handles a write event emited by the listener'''   
+        '''Handles a read event emited by the listener'''   
     @abstractFn
     def handle_accept(self):
-        '''Handles a write event emited by the listener'''   
-    @abstractFn
-    def handle_connect(self):
-        '''Handles a write event emited by the listener'''   
+        '''Handles a accept event emited by the listener'''   
     def isAsync(self):
         '''Return if it's async or not'''
         return True
