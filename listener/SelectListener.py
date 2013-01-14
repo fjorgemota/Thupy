@@ -47,12 +47,10 @@ class SelectListener(BaseListener):
         self.add(sock, mode)
     def getToRead(self):
         '''Return a list with sockets that can be readed'''
-        r = self.__read_events__[:]
-        return r
+        return self.__read_events__
     def getToWrite(self):
         '''Return a list with sockets that can be readed''',
-        r = self.__write_events__[:]
-        return r
+        return self.__write_events__
     def run(self):
         '''Run the thread listener in a separate thread, and send the data to other channels (if not sync)'''
         while True:
@@ -65,8 +63,9 @@ class SelectListener(BaseListener):
             read_events = []
             write_events = []
             for sockno in to_read:
+                #If socket is async...we have to see if it's a client, if it is, we call handle_read, if it's a server, we call handle_accept, otherwise, we publish it in a list
                 sock = read_sockets[sockno]
-                if isAsync(sock):
+                if isAsync(sock): #If async, call the methods..
                     if sock.getConfig(SocketConfig.MODE) == SocketType.CLIENT:
                         sock.handle_read()
                     else:
@@ -74,9 +73,17 @@ class SelectListener(BaseListener):
                 else:
                     read_events.append(sock)
             for sockno in to_write:
+                #If socket is async..we call the handler to write to the socket..If not, we publish it in a list..=P
                 sock = write_sockets[sockno]
                 if isAsync(sock):
                     sock.handle_write()
                 else:
                     write_events.append(sock)
-            map()
+            for sockno in to_except:
+                #Closes all sockets that emit a exceptional condition
+                sock = read_sockets.get(sockno, write_sockets.get(sockno))
+                sock.close() #If not exist, we have a big error in question of:::: Logic =P
+            self.__read_events__ = read_events #Just replace the list of sockets that can be readed (PS: It's thread-safe)
+            self.__write_events__ = write_events #Just replace the list of sockets that can be writed (PS: It's thread-safe)
+            
+            
