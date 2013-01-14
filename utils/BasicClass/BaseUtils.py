@@ -34,8 +34,8 @@ class BaseUtils:
             return (name, val)
         logging.debug("Verificando atributo %s da classe %s com o modo %s"%(name, cls_name, mode))
         if getattr(classAttrs.get(name),"__arguments__",None) != getattr(val,"__arguments__",None):
-            raise Exception("The method '"+name+"' in the class '"+cls_name+"' has not defined correctly (in arguments)")
-        if getattr(classAttrs.get(name),"__decorators__",[]) != getattr(val,"__decorators__",[]):
+            raise Exception("The method '"+name+"' in the class '"+cls_name+"' has not defined correctly (in arguments) (or it can be static..)")
+        elif getattr(classAttrs.get(name),"__decorators__",[]) != getattr(val,"__decorators__",[]):
             raise Exception("The method '"+name+"' in the class '"+cls_name+"' don't have the correct decorators")
         return (name, val)
     @staticmethod
@@ -44,7 +44,9 @@ class BaseUtils:
         if name != "__metaclass__" and callable(val):
             logging.debug("Aplicando modificacoes ao metodo %s"%name)
             val.__arguments__ = inspect.getargspec(val) #Save the arguments of the function
-            val.__decorators__ = BaseUtils.getDecoratorHistory(val) #Detect if static
+            val.__decorators__ = BaseUtils.getDecoratorHistory(val, False) #Detect if static
+            if val.__decorators__:
+                val.__decorators__.pop()
         return (name,val)
     @staticmethod
     def findBases(mode, cls_parents):
