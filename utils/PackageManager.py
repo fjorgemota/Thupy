@@ -1,4 +1,4 @@
-from utils.BasicClass2 import enum
+from utils.BasicClass import enum
 import Queue, logging as _logging, urllib, urlparse, re, tarfile, subprocess, sys, os,shlex, platform, tempfile, shutil
 import __builtin__
 logging = _logging.getLogger("PackageManager")
