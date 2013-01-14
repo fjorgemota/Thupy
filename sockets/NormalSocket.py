@@ -33,12 +33,12 @@ class NormalSocket(BaseSocket):
     def accept(self):
         assert self.__mode == SocketType.SERVER, "Can't accept on clients sockets"
         return NormalSocket(self.__sock.accept())
-    def getConfig(self, key):
-        assert key in SocketConfig, "Not valid"
-        return self.__config[key]
-    def setConfig(self, key, val):
-        assert key in SocketConfig, "Not valid"
-        self._config[key] = val
+    def getConfig(self, name):
+        assert name in SocketConfig, "Not valid"
+        return self.__config[name]
+    def setConfig(self, name, value):
+        assert name in SocketConfig, "Not valid"
+        self._config[name] = value
         return True
     def applyConfig(self):
         cfg = self.__config
@@ -52,6 +52,7 @@ class NormalSocket(BaseSocket):
             self.__initialized = True #It's just updated now!
         self.__sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, [0,1][cfg[SocketConfig.TCP_DELAY]])
         self.__sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, [0,1][cfg[SocketConfig.REUSE_ADDR]])
-                                                                             
+    def fileno(self):
+        return self.__sock.fileno()
         
         

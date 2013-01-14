@@ -18,9 +18,15 @@ class BaseListener(interface, Thread):
         pass
     def remove(self, sock, mode):
         '''Remove the socket from the listener'''
-        pass
+        pass    
     def modify(self, sock, mode):
         '''Modify the listener mode of the socket'''
+        pass
+    def getToRead(self):
+        '''Return a iterator with sockets that can be readed'''
+        pass
+    def getToWrite(self):
+        '''Return a iterator with sockets that can be readed'''
         pass
     def run(self):
         '''Run the thread listener in a separate thread, and send the data to other channels (if not sync)'''
@@ -28,4 +34,3 @@ class BaseListener(interface, Thread):
 class ListenerMode(enum):
     WRITE = None
     READ = None
-    

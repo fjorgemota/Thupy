@@ -312,8 +312,10 @@ class Configuration:
         if not self.files.has_key(filename):
             self.files[filename] = ConfigurationFile(filename, section)
         return self.files[filename] 
-    def getPath(self, path="", default = None, original_parent=self):
+    def getPath(self, path="", default = None, original_parent=None):
         path = path.split("/")
+        if not original_parent:
+            original_parent = None
         parent = original_parent
         for item in path:
             if parent.hasSection(item):

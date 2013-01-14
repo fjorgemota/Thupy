@@ -42,8 +42,9 @@ class AbstractInterfaceType(type):
             map(functools.partial(BaseUtils.verifyAttr, verify_mode, cls_name, classAttrs), cls_attrs.iteritems())
             methodsNotEncountered = filter(lambda attr: attr!="__metaclass__" and callable(classAttrs[attr]) and not getattr(classAttrs[attr],"__implemented__",verify_mode=="abstract") and attr not in cls_attrs,classAttrs.iterkeys())
             for method_not_encountered in methodsNotEncountered:
-                raise NotImplementedError("The method '"+method_not_encountered+"' was not encountered")
+                raise NotImplementedError("The method '"+method_not_encountered+"' was not encountered in the class '"+cls_name+"'")
             cls.saved[verify_mode] = cls.saved.get(verify_mode,[])+[cls_name] #Add the reference to allow the subclasses of this class to be scanned
         logging.debug("Criando classe")
         obj = super(AbstractInterfaceType, cls).__new__(cls, cls_name, cls_parents, cls_attrs)
+        print dir(obj)
         return obj

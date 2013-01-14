@@ -34,20 +34,52 @@ class BaseUtils:
             return (name, val)
         logging.debug("Verificando atributo %s da classe %s com o modo %s"%(name, cls_name, mode))
         if getattr(classAttrs.get(name),"__arguments__",None) != getattr(val,"__arguments__",None):
-            raise Exception("The method '"+name+"' in the class '"+cls_name+"' has not defined correctly")
+            raise Exception("The method '"+name+"' in the class '"+cls_name+"' has not defined correctly (in arguments)")
+        if getattr(classAttrs.get(name),"__decorators__",[]) != getattr(val,"__decorators__",[]):
+            raise Exception("The method '"+name+"' in the class '"+cls_name+"' don't have the correct decorators")
         return (name, val)
     @staticmethod
     def applyAll(item):
         name, val = item
         if name != "__metaclass__" and callable(val):
             logging.debug("Aplicando modificacoes ao metodo %s"%name)
-            val.__arguments__ = inspect.getargspec(val)
+            val.__arguments__ = inspect.getargspec(val) #Save the arguments of the function
+            val.__decorators__ = BaseUtils.getDecoratorHistory(val) #Detect if static
         return (name,val)
     @staticmethod
-    def findBases(mode, cls_parents, to = []):
+    def findBases(mode, cls_parents):
         logging.debug("Procurando parentes para a classe %s"%mode)
+        to = []
         bases_filtered = filter(lambda child_cls: filter(lambda cls_child: cls_child.__name__ == mode, child_cls.__bases__), cls_parents)
         to.extend(bases_filtered)
-        map(lambda child_cls: to.extend(BaseUtils.findBases(mode, child_cls.__bases__)), cls_parents)
+        map(lambda child_cls: to.extend(BaseUtils.findBases(mode, child_cls.__bases__)), to)
         to = list(set(to))
         return to
+    @staticmethod
+    def getDecoratorHistory(fn, natural_order=False,to=[]):
+        #Investigate func closures
+        if not hasattr(fn,"func_closure"):
+            try:
+                args = inspect.getargspec(getattr(fn,"__init__",lambda:None))
+            except:
+                return []
+            methods = dict(filter(lambda i: not inspect.ismethod(i[1]) and callable(i[1]), fn.__dict__.iteritems()))
+            if not methods:
+                raise Exception("How to access a variable that's don't aparently exists?")
+            if methods.keys()[1:]:
+                arg = args[0][1]
+                if not methods.has_key(arg):
+                    raise Exception("Not possible to recognize where the function is saved in decorator. Options available:%s"%"".join(methods.keys()))
+                fn = methods[arg]
+            else:
+                fn = fn.values()[0]
+                
+            to.append(fn)
+        if not getattr(fn,"func_closure",[]):
+            if natural_order:
+                to.reverse()
+            return to
+        if not to:
+            to.append(fn)
+        to.append(fn.func_closure[0].cell_contents)
+        return BaseUtils.getDecoratorHistory(to[-1], natural_order, to)
