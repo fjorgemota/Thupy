@@ -1,7 +1,4 @@
-#from ..utils.BasicClass import *
-import sys, unittest, logging, os
-logging.basicConfig(level=logging.DEBUG)
-sys.path.insert(0, os.path.realpath(os.path.join(os.getcwd(), "..", "..")))
+import unittest
 from utils.BasicClass import *
 class ConstructorEmpty(abstract):
     @abstractFn
