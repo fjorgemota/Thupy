@@ -65,9 +65,10 @@ def processWithRE(qs):
 	r = {}
 	itens = (remapGET(q) for q in detectRE(qs))
 	for key, val in itens:
-		brackets = splitBrackets("[")
+		brackets = splitBrackets(key)
 		if brackets:
 			#It's a Array, and it's recursive
+			brackets.insert(0, key.split("[")[0])
 			children = r #Children is just a pointer to r
 			c = 0 #Initialize at zero
 			l = len(brackets)-1 #Length-1 to detect end
@@ -88,15 +89,15 @@ def processWithRE(qs):
 	#return dict(remapGET(q) for q in detectRE(qs))
 #qs = createQueryString(10)
 qs = "teste[0][0][]=rs&teste[0][0][]=oi&teste[0][]=aehaueahu&teste[0][]=aheauehau"
-num_requests = 100000
+num_requests = 1000000
 print "Rodando %d requisicoes.."%num_requests
-#print qs
 def benchmark(func):
 	print "-"*100
 	print func.__name__
 	print "-"*100
 	dis.dis(func)
 	profile.run("".join([func.__name__,"(qs)"]))
+	print "Resultado da funcao ",func.__name__,":",func(qs)
 	result = timeit.timeit("".join([func.__name__,"(qs)"]),"".join(["from __main__ import ",func.__name__,", qs"]), number=num_requests)
 	print num_requests,"=",result," segundos"
 	return result
@@ -106,6 +107,7 @@ funcs = [processWithMap, processWithRE, processWithURLParse]
 if qs.count("[") > 1:
 	funcs.pop() #URL Parse does not manage multiple brackets
 results = map(benchmark, funcs)
+#results = []
 print "-"*1000
 print "Mais rapido:",funcs[results.index(min(results))].__name__,"(com ",min(results)," segundos)"
 print "Mais lento:",funcs[results.index(max(results))].__name__,"(com ",max(results)," segundos)"
