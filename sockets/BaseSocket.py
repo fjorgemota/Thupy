@@ -14,6 +14,8 @@ class BaseSocket(interface):
     def read(self, buf=-1):
         '''Read a determinated message with a determinated length from the socket'''
         pass
+    def close(self):
+        '''Just close the socket'''
     def setConfig(self, name, value):
         '''Set a configuration using the key name'''
         pass
@@ -39,6 +41,8 @@ def BaseAsyncSocket(BaseSocket, interface):
         '''Handles a read event emited by the listener'''   
     def handle_accept(self):
         '''Handles a accept event emited by the listener'''   
+    def handle_close(self):
+        '''Handles a close event emited by the listener'''
 class SocketType(enum):
     SERVER = None
     CLIENT = None
