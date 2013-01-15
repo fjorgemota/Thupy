@@ -16,7 +16,7 @@ class BaseListener(interface, Thread):
     def add(self, sock, mode):
         '''Add the socket to the listener'''
         pass
-    def remove(self, sock, mode):
+    def remove(self, sock):
         '''Remove the socket from the listener'''
         pass    
     def modify(self, sock, mode):
@@ -28,9 +28,17 @@ class BaseListener(interface, Thread):
     def getToWrite(self):
         '''Return a iterator with sockets that can be readed'''
         pass
+    def getTimeout(self):
+        '''Return the timeout between loops of this listener'''
+    def setTimeout(self, timeout=-1):
+        '''Set the timeout between loops of this listener'''    
     def run(self):
         '''Run the thread listener in a separate thread, and send the data to other channels (if not sync)'''
         pass
+    @staticmethod
+    def getSupportedPoints():
+        '''Return a integer indicating if the listener is supported in the actual runtime and the relative performance of it. A value < 0 indicate that the listener is not supported, and the listener with the biggest value is used in the system'''
+        return 0
 class ListenerMode(enum):
     WRITE = None
     READ = None
