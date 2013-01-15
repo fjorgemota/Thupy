@@ -54,5 +54,7 @@ class NormalSocket(BaseSocket):
         self.__sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, [0,1][cfg[SocketConfig.REUSE_ADDR]])
     def fileno(self):
         return self.__sock.fileno()
+    def close(self):
+        self.__sock.close()
         
         
