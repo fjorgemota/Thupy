@@ -49,7 +49,16 @@ class AsyncSocket(NormalSocket, BaseAsyncSocket):
         if self.getConfig(SocketConfig.MODE) == SocketType.CLIENT:#It can't accept of a client
             return #Just return
         self.__accepted_sockets.put_nowait(AsyncSocket(self.__sock.accept())) #Accept and put on queue..
-    
+    def handle_close(self): 
+        '''Just close the socket, just this'''
+        self.close()
+    def applyConfig(self):
+        #Override to allow fast calls to handle_read and handle_accept
+        super(AsyncSocket, self).applyConfig()
+        if self.getConfig(SocketConfig.MODE) == SocketType.CLIENT:
+            self.handle_read_event = self.handle_read #If a client
+        else:
+            self.handle_read_event = self.handle_accept #If a server
     
         
     
