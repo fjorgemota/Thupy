@@ -67,21 +67,6 @@ else:
     @microThreadDecorator
     def factorial(n):
         return reduce(factorialMult,xrange(1, n+1))
-def dec(fn):
-    def wrapper(*args, **kwargs):
-        print "RISOS"
-        r = fn(*args, **kwargs)
-        print ":D"
-        print r
-        return r
-    wrapper.__name__ = fn.__name__
-    for attr in dir(fn):
-        if "microThread" not in attr:
-            continue
-        setattr(wrapper, attr, getattr(fn, attr))
-    return wrapper
-__builtins__.dec = dec
-@dec
 @microThreadDecorator
 def page():
     return 'HTTP/1.1 200\r\nContent-type:text/html\r\n\r\nHello, world'
