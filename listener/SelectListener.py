@@ -5,7 +5,7 @@ Created on 13/01/2013
 '''
 from BaseListener import BaseListener, ListenerMode
 from utils.BasicClass import enum
-import select, threading, Queue
+import select, threading, Queue, time
 from sockets.BaseSocket import isAsync, SocketConfig, SocketType
 def getFileNO(s):
     '''Just get File Number to use with Sockets =P'''
@@ -20,6 +20,7 @@ class SelectListener(BaseListener):
     '''Listener that use Select functions to detect events'''
     def __init__(self):
         '''Constructs the listener, initializing variables such as readed sockets, writed sockets and etc...'''
+        super(SelectListener, self).__init__()
         self.__read_sockets__ = []
         self.__write_sockets__ = []
         self.__read_events__ = []
@@ -29,6 +30,7 @@ class SelectListener(BaseListener):
         self.__new_sockets__ = []
         self.__new_modify_sockets__ = threading.Lock()
         self.__actions__ = Queue.Queue() 
+        self.__empty__ = threading.Event()
     def poll(self, blocking=False):
         '''Returns a list with sockets that have events to read and write'''
         if blocking:
@@ -98,6 +100,9 @@ class SelectListener(BaseListener):
                     self.__modes__[mode].append(sock)
                 elif action == SelectActions.REMOVE and sock in self.__modes__[mode]:
                     self.__modes__[mode].remove(sock)
+            if not self.__read_sockets__ and not self.__write_sockets__:
+                time.sleep([self.__timeout__, 1][self.__timeout__ == None]) #Sleep the thread
+                continue #Continue and repeat
             read_sockets = getSockets(self.__read_sockets__)#Organize it..xD
             write_sockets = getSockets(self.__write_sockets__) #Organize it..xD
             to_read, to_write, to_except = select.select(read_sockets.keys(), write_sockets.keys(), read_sockets.keys()+write_sockets.keys(), self.__timeout__)

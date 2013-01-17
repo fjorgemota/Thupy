@@ -5,7 +5,7 @@ Created on 14/01/2013
 '''
 from BaseListener import BaseListener, ListenerMode
 import select, threading, Queue
-from sockets.BaseSocket import isAsync
+from sockets.bases import isAsync
 from utils.BasicClass import enum
 class EPollActions(enum):
     ADD = None
@@ -13,6 +13,7 @@ class EPollActions(enum):
     REMOVE = None
 class EPollListener(BaseListener):
     def __init__(self):
+        super(EPollListener, self).__init__()
         self.__manager__ = select.epoll()
         self.__timeout__ = -1
         self.__readed_sockets__ = []
