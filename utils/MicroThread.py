@@ -942,9 +942,7 @@ class MicroThread(object):
             self.run = kwargs.get("fn", args[0])
             if kwargs.has_key("fn"):
                 del kwargs["fn"]
-        self.callbacks = {}
-        for mode in MicroThreadCallbacksMode:
-            self.callbacks[mode] = []
+        self.callbacks = dict.fromkeys(MicroThreadCallbacksMode, [])
         if callable(kwargs.get("microThread_callback")):
             self.callbacks[MicroThreadCallbacksMode.ALL].append(kwargs.pop("microThread_callback"))
         self.parseFuncs = kwargs.pop("microThread_parseFuncs",True)
