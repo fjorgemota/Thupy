@@ -9,7 +9,7 @@ class BaseListener(interface, Thread):
     '''Thread that dispatches socket events sync and asyncronously in real time'''
     def __init__(self):
         '''Constructs the listener, initializing variables such as readed sockets, writed sockets and etc...'''
-        pass
+        super(BaseListener, self).__init__() #Initializes the thread
     def poll(self):
         '''Returns a iterable with sockets that have events to read and write'''
         pass
