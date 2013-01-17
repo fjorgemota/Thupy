@@ -4,51 +4,69 @@ Created on 11/01/2013
 @author: fernando
 '''
 from NormalSocket import NormalSocket
-from BaseSocket import BaseAsyncSocket
-from Queue import Queue
-from BaseSocket import SocketConfig
-from sockets.BaseSocket import SocketType
-class AsyncSocket(NormalSocket, BaseAsyncSocket):
+import Queue
+from sockets.bases import BaseAsyncSocket, SocketConfig, SocketType, AsyncCallbackMode
+class AsyncSocket(BaseAsyncSocket, NormalSocket):
     '''Implements a AsyncSocket using handlers defined by the AsyncSocket class'''
     def __init__(self, *args, **kwargs):
         '''Implements constructor to construct queues'''
         super(AsyncSocket, self).__init__(*args, **kwargs) #Call super class to initialize other variables
-        self.__write_messages = [] #List with characters to be writed to the socket
-        self.__read_messages = Queue() #Queue with readed messages
-        self.__accepted_sockets = Queue() #Queue with accepted sockets
+        self.__write_messages__ = [] #List with characters to be writed to the socket
+        self.__read_messages__ = Queue.Queue() #Queue with readed messages
+        self.__accepted_sockets__ = Queue.Queue() #Queue with accepted sockets
+        self.__callbacks__ = dict.fromkeys(AsyncCallbackMode, []) #Create a dictionary to save the events
     def canRead(self):
         '''It's always readable'''
         return True #It can read in any time..
     def canWrite(self):
         '''If has messages to be sended, return True, otherwise False'''
-        return bool(self.__write_messages) #It have new characters?
+        return bool(self.__write_messages__) #It have new characters?
     def write(self, msg):
         '''Put each character in the queue'''
-        self.__write_messages.extend(msg)
+        self.__write_messages__.extend(msg)
     def read(self, buf=-1):
         '''Read a determinated number of characters from the buffer. If the socket is blocking, await to get the determinated number of characters with the receive by the thread listener'''
         result = []
         blocking = self.getConfig(SocketConfig.BLOCKING) 
         if buf < 0:
-            buf = self.__read_messages.qsize()
+            buf = self.__read_messages__.qsize()
         for _ in xrange(0, buf):
-            result.append(self.__read_messages.get(blocking)) #Await a new character
-            self.__read_messages.task_done()
+            try:
+                result.append(self.__read_messages__.get(blocking)) #Await a new character
+            except Queue.Empty: 
+                break
+            self.__read_messages__.task_done()
         return "".join(result)
     def handle_read(self):
         if self.getConfig(SocketConfig.MODE) == SocketType.SERVER: #It can't read from a socket that is a...server
             return #Just return
-        map(self.__read_messages.put_nowait, super(AsyncSocket, self).read())
+        msg = super(AsyncSocket, self).read()#Read the message from the socket
+        map(self.__read_messages.put_nowait, msg)
+        for callback in self.__callbacks__[AsyncCallbackMode.READ]:
+            callback(self, msg, "".join(self.__write_messages__))
+        for callback in self.__callbacks__[AsyncCallbackMode.ALL]:
+            callback(AsyncCallbackMode.READ, self, msg))
     def handle_write(self):
         '''Send messages from the buffer..'''
         if not self.__write_messages or self.getConfig(SocketConfig.MODE) == SocketType.SERVER:#It can't write if not have messages or the socket is a...server
             return
-        self.__write_messages = self.__write_messages[self.__sock.send("".join(self.__write_messages)):]
+        sended = self.__sock.send("".join(self.__write_messages))
+        msg = self.__write_messages__[:sended]
+        self.__write_messages__ = self.__write_messages__[sended:]
+        for callback in self.__callbacks__[AsyncCallbackMode.WRITE]:
+            callback(self, msg, "".join(self.__write_messages__))
+        for callback in self.__callbacks__[AsyncCallbackMode.ALL]:
+            callback(AsyncCallbackMode.WRITE, self, msg, "".join(self.__write_messages__))
     def handle_accept(self):
         '''Accepts...But not in this socket (?)'''
         if self.getConfig(SocketConfig.MODE) == SocketType.CLIENT:#It can't accept of a client
             return #Just return
-        self.__accepted_sockets.put_nowait(AsyncSocket(self.__sock.accept())) #Accept and put on queue..
+        sock = AsyncSocket(self.__sock.accept())
+        self.__accepted_sockets.put_nowait(sock) #Accept and put on queue..
+        for callback in self.__callbacks__[AsyncCallbackMode.ACCEPT]:
+            callback(self, sock)
+        for callback in self.__callbacks__[AsyncCallbackMode.ALL]:
+            callback(AsyncCallbackMode.ACCEPT, self, sock)
     def handle_close(self): 
         '''Just close the socket, just this'''
         self.close()
@@ -59,6 +77,10 @@ class AsyncSocket(NormalSocket, BaseAsyncSocket):
             self.handle_read_event = self.handle_read #If a client
         else:
             self.handle_read_event = self.handle_accept #If a server
-    
-        
+    def addCallback(self, callback, mode=AsyncCallbackMode.ALL):
+        assert mode in AsyncCallbackMode, "Mode invalid"
+        self.__callbacks__[mode].append(callback)
+    def removeCallback(self, callback, mode=AsyncCallbackMode.ALL):
+        assert mode in AsyncCallbackMode, "Mode invalid"
+        self.__callbacks__[mode].remove(callback)    
     
