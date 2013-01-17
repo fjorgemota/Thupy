@@ -1,7 +1,16 @@
-import re, timeit, profile, dis, os
+import re, timeit, profile, dis, os, functools, urllib
 from cgi import parse_qs as processWithURLParse
-def createQueryString(n=10):
-	return "&".join(map("=".join, [["".join(["key",str(c)]), "".join(["value",str(c)])] for c in xrange(n) ]))
+def createQueryString(n=10, level=0):
+	joinQueries = "=".join
+	if not level:
+		return "&".join(map(joinQueries, [["".join(["key",str(c)]), "".join(["value",str(c)])] for c in xrange(n) ]))
+	else:
+		query = []
+		start = 0
+		for levelc in xrange(level):
+			query.extend(map(joinQueries, [["".join(["key",str(c),"[]"*levelc]), "".join(["value",str(c)])] for c in xrange(start, start+n) ]))
+			start += n+1
+		return "&".join(query)
 def remapGET(q):
 	#return [q[0],[None,q[1]][q[1:] != []]]
 	return [q[0], None] if len(q) == 1 else [q[0], q[1]]
@@ -34,28 +43,27 @@ def convertToList(d):
 	
 def processWithMap(qs):
 	r = {}
-	itens = (remapGET(separateKey(q)) for q in qs.split("&"))
-	for key, val in itens:
+	for item in qs.split("&"):
+		key, val = remapGET(separateKey(item))
 		brackets = key.split("[")
 		if brackets:
 			#It's a Array, and it's recursive
 			children = r #Children is just a pointer to r
 			c = 0 #Initialize at zero
 			l = len(brackets)-1 #Length-1 to detect end
-			is_end = lambda: c==l #Indicate if ends
 			for bracket in brackets:
 				key_child = bracket.split("]",1)[0]
 				if not key_child and c>0:
 					key_child = str(len(children))
 				children[key_child] = children.get(key_child, {})
-				if not is_end():
+				if c != l:
 					children = children[key_child]#Replaces the pointer
 				else:
-					children[key_child] = val
+					children[key_child] = urllib.unquote_plus(val)
 				c += 1
 		else:
 			#It's not a array \o/
-			r[key] = val
+			r[key] = urllib.unquote_plus(val)
 	return convertToList(r)
 	
 detectRE = re.compile("&?([^&=]+)=?([^&]*)").findall
@@ -63,8 +71,8 @@ splitBrackets = re.compile("\[([^\]]*)\]").findall
 def processWithRE(qs):
 	#return dict(map(remapGET, re.findall("&?([^&=]+)=?([^&]*)", qs)))
 	r = {}
-	itens = (remapGET(q) for q in detectRE(qs))
-	for key, val in itens:
+	for  item in detectRE(qs): #An iterator!
+		key, val = remapGET(item) #Separate key and value
 		brackets = splitBrackets(key)
 		if brackets:
 			#It's a Array, and it's recursive
@@ -72,42 +80,54 @@ def processWithRE(qs):
 			children = r #Children is just a pointer to r
 			c = 0 #Initialize at zero
 			l = len(brackets)-1 #Length-1 to detect end
-			is_end = lambda: c==l #Indicate if ends
 			for key_child in brackets:
 				if not key_child and c>0:
 					key_child = str(len(children))
 				children[key_child] = children.get(key_child, {})
-				if not is_end():
-					children = children[key_child]#Replaces the pointer
-				else:
-					children[key_child] = val
+				if c!=l:
+					children = children[key_child]#Replaces the pointer			
+				else: 
+					children[key_child] = urllib.unquote_plus(val)
 				c += 1
 		else:
 			#It's not a array \o/
-			r[key] = val
+			r[key] = urllib.unquote_plus(val)
 	return convertToList(r)
 	#return dict(remapGET(q) for q in detectRE(qs))
 #qs = createQueryString(10)
-qs = "teste[0][0][]=rs&teste[0][0][]=oi&teste[0][]=aehaueahu&teste[0][]=aheauehau"
-num_requests = 1000000
+qs = createQueryString(10,10)
+print qs
+qs2 = createQueryString(10)
+num_requests = 10000
 print "Rodando %d requisicoes.."%num_requests
-def benchmark(func):
+def benchmark(func, qs_var_name):
 	print "-"*100
 	print func.__name__
 	print "-"*100
-	dis.dis(func)
-	profile.run("".join([func.__name__,"(qs)"]))
-	print "Resultado da funcao ",func.__name__,":",func(qs)
-	result = timeit.timeit("".join([func.__name__,"(qs)"]),"".join(["from __main__ import ",func.__name__,", qs"]), number=num_requests)
-	print num_requests,"=",result," segundos"
+	if os.name != "java":
+		dis.dis(func)
+	profile.run("".join([func.__name__,"(",qs_var_name,")"]))
+	print "Resultado da funcao ",func.__name__,":",func(globals().get(qs_var_name))
+	timer = timeit.Timer("".join([func.__name__,"(",qs_var_name,")"]),"".join(["from __main__ import ",func.__name__,", ",qs_var_name]))
+	result = timer.timeit(num_requests)
+	print num_requests," requisicoes =",result," segundos"
 	return result
 #print processWithRE(qs)
 processWithURLParse.__name__ = "processWithURLParse"
-funcs = [processWithMap, processWithRE, processWithURLParse]
-if qs.count("[") > 1:
-	funcs.pop() #URL Parse does not manage multiple brackets
-results = map(benchmark, funcs)
-#results = []
-print "-"*1000
-print "Mais rapido:",funcs[results.index(min(results))].__name__,"(com ",min(results)," segundos)"
-print "Mais lento:",funcs[results.index(max(results))].__name__,"(com ",max(results)," segundos)"
+def testAll(qs_var_name):
+	funcs = [processWithMap, processWithRE, processWithURLParse]
+	if globals().get(qs_var_name).count("[") > 1:
+		funcs.pop() #URL Parse does not manage multiple brackets
+	results = map(functools.partial(benchmark, qs_var_name=qs_var_name), funcs)
+	#results = []
+	print "-"*100
+	print "Ranking:"
+	for position, duration in enumerate(sorted(results)):
+		print position+1," lugar - ",funcs[results.index(duration)].__name__," - Com ",duration," segundos"
+	return results
+if __name__ == "__main__":
+	print "Com sub-chaves:"
+	testAll("qs")
+	print "-"*120
+	print "Sem sub-chaves:"
+	testAll("qs2")
