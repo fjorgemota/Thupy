@@ -30,6 +30,7 @@ class AbstractInterfaceType(type):
             cls.saved[mode[0]] = cls.saved.get(mode[0],[])+[cls_name]
             cls_attrs["__init__"] = BaseUtils.getConstructor(mode[0],cls_attrs.get("__init__"))
             cls_attrs = dict(map(BaseUtils.applyAll, cls_attrs.iteritems()))
+            cls_attrs["__cls_implemented__"] = False #Just a flag do indicate that no verified classes need to verificate in inheritance
         elif verify:
             logging.debug("Verificando como %s"%verify_mode)
             classAttrs = {}
@@ -45,6 +46,7 @@ class AbstractInterfaceType(type):
             for method_not_encountered in methodsNotEncountered:
                 raise NotImplementedError("The method '"+method_not_encountered+"' was not encountered in the class '"+cls_name+"'")
             cls.saved[verify_mode] = cls.saved.get(verify_mode,[])+[cls_name] #Add the reference to allow the subclasses of this class to be scanned
+            cls_attrs["__cls_implemented__"] = True #Just a flag do indicate that verified classes don't need to repeat the verification in inheritance
         logging.debug("Criando classe")
         obj = super(AbstractInterfaceType, cls).__new__(cls, cls_name, cls_parents, cls_attrs)
         #Scan static attributes
@@ -61,7 +63,6 @@ class AbstractInterfaceType(type):
             cls_static_methods = dict((attr for attr in cls_static_methods.iteritems() if attr not in classStaticAttrs_items))
             map(functools.partial(BaseUtils.verifyAttr, verify_mode, cls_name, classStaticAttrs), cls_static_methods.iteritems())
             methodsNotEncountered = filter(lambda attr: attr!="__metaclass__" and callable(classStaticAttrs[attr]) and not getattr(classStaticAttrs[attr],"__implemented__",verify_mode=="abstract") and attr not in cls_static_methods,classStaticAttrs.iterkeys())
-            print methodsNotEncountered
             for method_not_encountered in methodsNotEncountered:
                 raise NotImplementedError("The static method '"+method_not_encountered+"' was not encountered in the class '"+cls_name+"'")
         #setattr(__builtin__, cls_name, obj)

@@ -54,8 +54,9 @@ class BaseUtils:
         to = []
         bases_filtered = filter(lambda child_cls: filter(lambda cls_child: cls_child.__name__ == mode, child_cls.__bases__), cls_parents)
         to.extend(bases_filtered)
-        map(lambda child_cls: to.extend(BaseUtils.findBases(mode, child_cls.__bases__)), to)
+        map(lambda child_cls: to.extend(BaseUtils.findBases(mode, child_cls.__bases__)), filter(lambda child_cls: getattr(child_cls,"__cls_implemented__", True), to))
         to = list(set(to))
+        logging.debug("Parentes encontrados: %s"%", ".join(map(lambda cls: cls.__name__, to)))
         return to
     @staticmethod
     def getDecoratorHistory(fn, natural_order=False,to=[]):
