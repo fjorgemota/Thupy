@@ -73,6 +73,7 @@ class HTTPProtocol:
         self.__content__ = []
         self.write = self.__content__.extend
         self.status_code = 200
+        self.addContent = self.processFirstLine
     def processFirstLine(self, content):
         self.__buffer__ += content
         if self.__buffer__.count("\r\n") > 1:
