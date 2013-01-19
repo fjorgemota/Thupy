@@ -1,4 +1,4 @@
-import inspect, tokenize, itertools, threading, string, random, sys, os, time, re, logging as _logging, Queue, types, atexit, __builtin__, shutil
+import inspect, tokenize, itertools, threading, string, random, sys, os, time, re, logging as _logging, imp, Queue, types, atexit, __builtin__, shutil
 try:
     from hashlib import md5
 except ImportError:
@@ -12,7 +12,7 @@ try:
 except:
     pyx_to_dll = None
 from utils.functools import partial
-from utils.BasicClass.enum import enum
+from utils.BasicClass import enum
 logging = _logging.getLogger("MicroThread")
 class MicroThreadSignals(enum):
     RETURN = None
@@ -60,7 +60,7 @@ class SimpleGenerator(object):
                 continue
             break
     def throw(self, type_exception, *args, **kwargs):
-        self.sender.throw(type_exception,*args,**kwargs)
+        self.sender.throw(type_exception, *args, **kwargs)
     def manageCallback(self, thread, mode, item):
         if mode == MicroThreadCallbacksMode.YIELD:
             while True:
@@ -72,7 +72,7 @@ class SimpleGenerator(object):
             if thread.isWaiting():
                 while True:
                     try:
-                        m= self.sendQueue.get_nowait()
+                        m = self.sendQueue.get_nowait()
                     except Queue.Empty:
                         continue
                     thread.send(m)
@@ -89,14 +89,15 @@ class MicroThreadTask(object):
         self.time_processing = 0
         self.priority = 100
         self.count = 0
-        self.to_send = Queue.Queue() #Queue to put itens to send
+        self.sleeped = None  # Indicates the time to continue execution of the thread after a time.sleep call
+        self.to_send = Queue.Queue()  # Queue to put itens to send
         self.need_send = False
-        self.running = threading.Lock() # A lock to detect if it's running or no
-        self.terminated = threading.Event() #Flag with terminated event
-        self.result = []#Put's in ALL the results emited by the MicroThread
-        self.result_lock = threading.Lock() #A lock to block modifications in self.result during iteration
-        self.result_queues = [] #A list of queues to put in new results during the execution of MicroThread
-        self.result_sended = False#Only a flag to indicate if a call to waitResult() have or not access to send..
+        self.running = threading.Lock()  # A lock to detect if it's running or no
+        self.terminated = threading.Event()  # Flag with terminated event
+        self.result = []  # Put's in ALL the results emited by the MicroThread
+        self.result_lock = threading.Lock()  # A lock to block modifications in self.result during iteration
+        self.result_queues = []  # A list of queues to put in new results during the execution of MicroThread
+        self.result_sended = False  # Only a flag to indicate if a call to waitResult() have or not access to send..
     def setTimeout(self, timeout):
         self.timeout = timeout
     def setPriority(self, priority):
@@ -108,8 +109,8 @@ class MicroThreadTask(object):
         logging.debug("Suspendendo tarefa")
         self.suspended = True
         MicroThreadPoll.remove(self)
-    def send(self,msg):
-        logging.debug("Adicionando informacao %s ao queue para envio posterior"%str(msg))
+    def send(self, msg):
+        logging.debug("Adicionando informacao %s ao queue para envio posterior" % str(msg))
         self.to_send.put_nowait(msg)
         self.resume()
     def resume(self):
@@ -129,7 +130,7 @@ class MicroThreadTask(object):
         self.terminated.wait()
         return True
     def waitResult(self, oldResult=False, send=False):
-        self.result_lock.acquire() #To not modify the list..xD
+        self.result_lock.acquire()  # To not modify the list..xD
         queue = Queue.Queue()
         self.result_queues.append(queue)
         if not inspect.isgeneratorfunction(self.run):
@@ -138,67 +139,74 @@ class MicroThreadTask(object):
             raise Exception("Allowed only one sender by Micro-Thread")
             send = False
         if send:
-            #Yields all the values, and, if needed, it can send values too!
+            # Yields all the values, and, if needed, it can send values too!
             self.result_sended = True
             instance = self
             def waitResult():
-                if oldResult:#Only if this flag is True
-                    for result in instance.result:#Iter all, but only return one xD
-                        yield result #Just return
-                    instance.result_locks.release() #Release the lock to continue execution
+                if oldResult:  # Only if this flag is True
+                    for result in instance.result:  # Iter all, but only return one xD
+                        yield result  # Just return
+                    instance.result_locks.release()  # Release the lock to continue execution
                 try:
                     while True:
-                        res = queue.get()#blocks..
+                        res = queue.get()  # blocks..
                         if res["mode"] == MicroThreadCallbacksMode.TIMEOUTED:
                             raise Exception("MicroThread timeouted!")
                         elif res["mode"] == MicroThreadCallbacksMode.KILLED:
                             raise Exception("Microthread killed!")
                         elif res["mode"] == MicroThreadCallbacksMode.YIELD:
-                            yield res["result"] #Just Yield!
+                            yield res["result"]  # Just Yield!
                         elif res["mode"] == MicroThreadCallbacksMode.YIELD_AWAIT_RESULT:
-                            instance.send((yield res["result"])) #Yields a value and wait another to send..xD
+                            instance.send((yield res["result"]))  # Yields a value and wait another to send..xD
                         else:
-                            break #Just break!
-                finally:#Just closes the generator
+                            break  # Just break!
+                finally:  # Just closes the generator
                     instance.result_sended = False
         else:
             instance = self
             if inspect.isgeneratorfunction(self.run):
-                #Yields all the values, and, if needed, but it can't send values too!
+                # Yields all the values, and, if needed, but it can't send values too!
                 def waitResult():
-                    if oldResult:#Only if this flag is True
-                        for result in instance.result:#Iter all, and yield all too
-                            yield result #Yield the value..xD
-                        instance.result_locks.release() #Release the lock to continue execution
+                    if oldResult:  # Only if this flag is True
+                        for result in instance.result:  # Iter all, and yield all too
+                            yield result  # Yield the value..xD
+                        instance.result_locks.release()  # Release the lock to continue execution
                     while True:
-                        res = queue.get()#blocks..
+                        res = queue.get()  # blocks..
                         if res["mode"] == MicroThreadCallbacksMode.TIMEOUTED:
                             raise Exception("MicroThread timeouted!")
                         elif res["mode"] == MicroThreadCallbacksMode.KILLED:
                             raise Exception("Microthread killed!")
-                        elif res["mode"] in (MicroThreadCallbacksMode.YIELD,MicroThreadCallbacksMode.YIELD_AWAIT_RESULT):
-                            yield res["result"] #Just Yield!
+                        elif res["mode"] in (MicroThreadCallbacksMode.YIELD, MicroThreadCallbacksMode.YIELD_AWAIT_RESULT):
+                            yield res["result"]  # Just Yield!
                         else:
-                            break #Just break!
+                            break  # Just break!
             else:
-                #Just return a value xD
+                # Just return a value xD
                 def waitResult():
-                    if oldResult:#Only if this flag is True
-                        for result in instance.result:#Iter all, but only return one xD
-                            return result #Just return
-                        instance.result_locks.release() #Release the lock to continue execution
-                    res = queue.get() #Blocks..
+                    if oldResult:  # Only if this flag is True
+                        for result in instance.result:  # Iter all, but only return one xD
+                            return result  # Just return
+                        instance.result_locks.release()  # Release the lock to continue execution
+                    res = queue.get()  # Blocks..
                     if res["mode"] == MicroThreadCallbacksMode.TIMEOUTED:
                         raise Exception("MicroThread timeouted!")
                     elif res["mode"] == MicroThreadCallbacksMode.KILLED:
                         raise Exception("Microthread killed!")
                     return res["result"]
-        return waitResult() #A function can't be a generator or return a result at the same time, and this allows the two possibilities to be realized at the same time and in any implementation. xD
+        return waitResult()  # A function can't be a generator or return a result at the same time, and this allows the two possibilities to be realized at the same time and in any implementation. xD
     def isWaiting(self):
         return self.need_send
     def isRunning(self):
-        return self.lock.locked()
+        return self.lock.locked()       
     def next(self):
+        if self.sleeped:  # Check if isn't none
+            if self.sleeped <= time.time():
+                # Oh, just the time!
+                self.sleeped = None
+            else:
+                return  # Just return to not process this micro-thread now..
+            # Why we don't use the suspend function? Why we can't to use other Thread or pool to check this..:v
         self.count += self.priority
         while self.count > 100:
             init_time = time.time()
@@ -219,14 +227,14 @@ class MicroThreadTask(object):
                 else:
                     result = self.task.next()
             except StopIteration:
-                result = [1]
+                result = [MicroThreadSignals.RETURN]
             final_time = time.time()
             self.time_processing += final_time - init_time
             if self.killed:
                 logging.debug("Matando tarefa")
                 self.terminated.set()
                 self.result_lock.acquire()
-                result_to_queue = {"mode":MicroThreadCallbacksMode.KILLED,"result":None}
+                result_to_queue = {"mode":MicroThreadCallbacksMode.KILLED, "result":None}
                 self.result.append(result_to_queue)
                 map(lambda q: q.put_nowait(result_to_queue), self.result_queues)
                 self.result_lock.release()
@@ -241,7 +249,7 @@ class MicroThreadTask(object):
                 logging.debug("Retornando timeout")
                 self.terminated.set()
                 self.result_lock.acquire()
-                result_to_queue = {"mode":MicroThreadCallbacksMode.TIMEOUTED,"result":None}
+                result_to_queue = {"mode":MicroThreadCallbacksMode.TIMEOUTED, "result":None}
                 self.result.append(result_to_queue)
                 map(lambda q: q.put_nowait(result_to_queue), self.result_queues)
                 self.result_lock.release()
@@ -253,7 +261,7 @@ class MicroThreadTask(object):
                 raise StopIteration()
                 break
             elif result[0] == MicroThreadSignals.SIMPLE_PASS:
-                pass #Just to not execute the other "elif" statements =Pz
+                pass  # Just to not execute the other "elif" statements =Pz
             elif result[0] == MicroThreadSignals.RETURN:
                 logging.debug("Retornando resultado da tarefa")
                 self.terminated.set()
@@ -263,7 +271,7 @@ class MicroThreadTask(object):
                     arg = arg[0]
                 elif not arg:
                     arg = None
-                result_to_queue = {"mode":MicroThreadCallbacksMode.RETURN,"result":arg}
+                result_to_queue = {"mode":MicroThreadCallbacksMode.RETURN, "result":arg}
                 self.result.append(result_to_queue)
                 map(lambda q: q.put_nowait(result_to_queue), self.result_queues)
                 self.result_lock.release()
@@ -274,7 +282,7 @@ class MicroThreadTask(object):
                     pass
                 raise StopIteration()
                 break
-            elif result[0] in (MicroThreadSignals.YIELD,MicroThreadSignals.YIELD_AWAIT_RESULT):
+            elif result[0] in (MicroThreadSignals.YIELD, MicroThreadSignals.YIELD_AWAIT_RESULT):
                 logging.debug("Retornando yield")
                 self.need_send = result[0] == MicroThreadSignals.YIELD_AWAIT_RESULT
                 self.thread.callCallback([MicroThreadCallbacksMode.YIELD, MicroThreadCallbacksMode.YIELD_AWAIT_RESULT][self.need_send], result[1:])
@@ -282,13 +290,34 @@ class MicroThreadTask(object):
                     logging.debug("Aguardando resultado")
                     self.suspend()
             elif result[0] == MicroThreadSignals.CALL_FUNCTION:
-                logging.debug("Chamando funcao %s"%result[1].__name__)
+                if result[1] == time.sleep:
+                    logging.debug("Sleeping Micro-Thread...")
+                    # The thread want to sleep..
+                    self.time_processing += result[2][0]  # Add to the processing time
+                    if self.timeout != None and self.timeout < self.time_processing:
+                        logging.debug("Return timeout because the time.sleep was big...")
+                        self.terminated.set()
+                        self.result_lock.acquire()
+                        result_to_queue = {"mode":MicroThreadCallbacksMode.TIMEOUTED, "result":None}
+                        self.result.append(result_to_queue)
+                        map(lambda q: q.put_nowait(result_to_queue), self.result_queues)
+                        self.result_lock.release()
+                        self.thread.callCallback(MicroThreadCallbacksMode.TIMEOUTED, [])
+                        try:
+                            self.task.close()
+                        except GeneratorExit:
+                            pass
+                        raise StopIteration()
+                        break 
+                    self.sleeped = time.time() + result[2][0]  # Time to wait..
+                    continue  # Just continue..we have processed the call now..
+                logging.debug("Chamando funcao %s" % result[1].__name__)
                 self.need_send = True
                 if result[3].pop("microThread_enable", True):
                     priority = result[3].pop("microThread_priority", self.priority)
                     timeout = result[3].pop("microThread_timeout", None)
                     try:
-                        mt = MicroThread(result[1], *result[2],**result[3])
+                        mt = MicroThread(result[1], *result[2], **result[3])
                         self.suspend()
                         if inspect.isgeneratorfunction(result[1]):
                             SimpleGenerator(self.thread, mt)
@@ -304,17 +333,17 @@ class MicroThreadTask(object):
                         mt.start()
                         mt.setPriority(priority)
                         if not timeout and self.getTimeout():
-                            timeout = self.getTimeout()-self.getTimeRunning()
+                            timeout = self.getTimeout() - self.getTimeRunning()
                         mt.setTimeout(timeout)
                     except:
                         try:
-                            self.send(result[1](*result[2],**result[3]))
+                            self.send(result[1](*result[2], **result[3]))
                         except Exception, e:
                             self.throw(type(e), e.message)
                         mt = None                       
                 else:
                     try:
-                        self.send(result[1](*result[2],**result[3]))
+                        self.send(result[1](*result[2], **result[3]))
                     except Exception, e:
                         self.throw(type(e), e.message)
             self.count -= 100 
@@ -334,8 +363,8 @@ class MicroThreadPoll:
     to_remove = []
     size = 0
     count = 0
-    funcs = {True:{},False:{}}
-    codes = {True:{},False:{}}
+    funcs = {True:{}, False:{}}
+    codes = {True:{}, False:{}}
     temp_dir = None
     def __init__(self):
         self.thread = False
@@ -357,11 +386,11 @@ class MicroThreadPoll:
     @staticmethod
     def add(task):
         logging.debug("Adicionando...")
-        return MicroThreadPoll.tasks.put_nowait(task.next) #It's never be full =P
+        return MicroThreadPoll.tasks.put_nowait(task.next)  # It's never be full =P
     @staticmethod
     def remove(task):
         logging.debug("Removendo..")
-        MicroThreadPoll.to_remove = itertools.chain(MicroThreadPoll.to_remove, [task]) #Adds to the iterator xD
+        MicroThreadPoll.to_remove = itertools.chain(MicroThreadPoll.to_remove, [task])  # Adds to the iterator xD
     @staticmethod
     def join():
         return MicroThreadPoll.tasks.join()
@@ -386,7 +415,7 @@ class MicroThreadPoll:
             func_hash.insert(0, "h")
         return "".join(func_hash)
     @staticmethod
-    def parse(thread, parseFuncs = True):
+    def parse(thread, parseFuncs=True):
         func = MicroThreadPoll.getFunction(thread)
         if inspect.isbuiltin(func):
             raise TypeError("Can't manipulate builtins code")
@@ -428,7 +457,7 @@ class MicroThreadPoll:
                 logging.debug("Tokenizando codigo")
                 tokens = tokenize.generate_tokens(iter(temp_code).next)
                 for token in tokens:
-                    #print parenteses
+                    # print parenteses
                     if token[1] in ("else", "elif", "except", "finally", "@", "def"):
                         dont_work = True
                     elif token[0] == tokenize.COMMENT: 
@@ -441,7 +470,7 @@ class MicroThreadPoll:
                         yieldSome = token
                     continue
                 opened = False
-                #if not dont_work and line.count(tab) != actual_tab_count:
+                # if not dont_work and line.count(tab) != actual_tab_count:
                 #    dont_work = True
                 #    actual_tab_count = line.count(tab)
             except:
@@ -455,7 +484,7 @@ class MicroThreadPoll:
             elif yieldSome:
                 logging.debug("Substituindo yield")
                 line = list(line)
-                line[yieldSome[2][1]:yieldSome[3][1]] = "yield "+["MicroThreadSignals.YIELD","MicroThreadSignals.YIELD_AWAIT_RESULT"][line[yieldSome[2][1]-1]=="("]+","
+                line[yieldSome[2][1]:yieldSome[3][1]] = "yield " + ["MicroThreadSignals.YIELD", "MicroThreadSignals.YIELD_AWAIT_RESULT"][line[yieldSome[2][1] - 1] == "("] + ","
                 line = "".join(line) 
             if not opened and not temp_code[1:] and not dont_work:
                 logging.debug("Atualizando funcao...")
@@ -466,8 +495,8 @@ class MicroThreadPoll:
                 dont_work = False
             logging.debug("Adicionando nova linha")
             new_lines.append(line)
-        #func_name = fn_names[0][0]
-        #fn_names.reverse()
+        # func_name = fn_names[0][0]
+        # fn_names.reverse()
         first = True
         while True:
             if not first and not parseFuncs:
@@ -477,7 +506,7 @@ class MicroThreadPoll:
             parenteses = [0]
             fn_name = [None]
             fn_names = []
-            banned_words = ["yield","return","def","dict","items","globals","locals", "global", "if", "else","for","cython","with","while","in","not"]+dir(__builtin__)
+            banned_words = ["yield", "return", "def", "dict", "items", "globals", "locals", "global", "if", "else", "for", "cython", "with", "while", "in", "not"] + dir(__builtin__)
             count = 0
             func_locals = []
             last_token = None
@@ -493,14 +522,14 @@ class MicroThreadPoll:
                 elif token[0] == tokenize.NAME and token[1] not in banned_words:
                     is_fn = False
                     dot = False
-                    is_var = tokens[count+1][1] != "=" and token[1] not in vars_banned and token[1] not in func_name
+                    is_var = tokens[count + 1][1] != "=" and token[1] not in vars_banned and token[1] not in func_name
                     if last_token and is_var:
-                        is_var = last_token[1] not in (".","for")
+                        is_var = last_token[1] not in (".", "for")
                     if is_var:
                         vars_used.append(token[1])
                     else:
                         vars_banned.append(token[1])
-                    for temp_token in tokens[count+1:]:
+                    for temp_token in tokens[count + 1:]:
                         if temp_token[0] == tokenize.OP:
                             if temp_token[1] == ".":
                                 dot = True
@@ -513,7 +542,7 @@ class MicroThreadPoll:
                         else:
                             break
                     if last_token:
-                        if last_token[0] == tokenize.OP and last_token[1] in (".","@"):
+                        if last_token[0] == tokenize.OP and last_token[1] in (".", "@"):
                             is_fn = False
                     if is_fn:
                         func_defined.append([0, 1][last_token[1] == "def"])
@@ -530,7 +559,7 @@ class MicroThreadPoll:
                         funcs_defined[-1].append(token)
                 elif token[0] == tokenize.OP and token[1] == "(" and (fn_name or funcs_defined):
                     if fn_name[-1] or func_defined[-1]:
-                        parenteses = map(lambda p:p+1,parenteses)
+                        parenteses = map(lambda p:p + 1, parenteses)
                         if parenteses[-1] == 1:
                             if func_defined[-1]:
                                 funcs_defined[-1].append(token)
@@ -538,7 +567,7 @@ class MicroThreadPoll:
                                 fn_name[-1].append(token)
                 elif token[0] == tokenize.OP and token[1] == ")" and (fn_name or funcs_defined):
                     if fn_name[-1] or funcs_defined[-1]:
-                        parenteses = map(lambda p:p-1,parenteses)
+                        parenteses = map(lambda p:p - 1, parenteses)
                         if parenteses[-1] == 0:
                             parenteses.pop()
                             if func_defined.pop():
@@ -547,11 +576,11 @@ class MicroThreadPoll:
                                 fn_name[-1].append(token)
                                 fn_names.append(fn_name.pop())
                 elif fn_name[-1]:
-                    if fn_name[-1][-1][0] != tokenize.OP or fn_name[-1][-1][1] not in ("(",")"):
+                    if fn_name[-1][-1][0] != tokenize.OP or fn_name[-1][-1][1] not in ("(", ")"):
                         if parenteses[-1] == 0 and token[1] != "=":
-                            banned_words.append("".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(",")"), fn_name.pop()))))
+                            banned_words.append("".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(", ")"), fn_name.pop()))))
                         elif parenteses[-1] == 0 and token[1] == "=":
-                            func_locals.append("".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(",")"), fn_name.pop()))))
+                            func_locals.append("".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(", ")"), fn_name.pop()))))
                         else:
                             fn_name.pop()
                         parenteses.pop()
@@ -564,21 +593,21 @@ class MicroThreadPoll:
                 raise Exception("Where's the function? o.O")
             if first:
                 for fn in funcs_defined:
-                    fn_name = "".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(",")", "def"), fn)))
-                    logging.debug("Detectado definicao da funcao %s"%fn_name)
+                    fn_name = "".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(", ")", "def"), fn)))
+                    logging.debug("Detectado definicao da funcao %s" % fn_name)
                     args = ["microthread", "microthread_locals", "microthread_globals", ""]
                     kwargs = []
-                    commas = [-1,0,{"row":fn[-2][2][0]-1,"col":fn[-2][2][1],"space":True}]
+                    commas = [-1, 0, {"row":fn[-2][2][0] - 1, "col":fn[-2][2][1], "space":True}]
                     parenteses = 1
-                    for row in range(fn[1][2][0]-1, fn[-1][2][0]):
+                    for row in range(fn[1][2][0] - 1, fn[-1][2][0]):
                         line = list(new_lines[row][:])
-                        col_start  =  0
+                        col_start = 0
                         col_real_start = 0
                         col_end = len(line)
-                        if row == fn[-2][2][0]-1:
-                            col_real_start = fn[-2][2][1]+1
+                        if row == fn[-2][2][0] - 1:
+                            col_real_start = fn[-2][2][1] + 1
                             col_start = fn[1][2][1]
-                        if row == fn[-1][2][0]-1:
+                        if row == fn[-1][2][0] - 1:
                             col_end = fn[-1][2][1]
                         for col in range(col_real_start, col_end):
                             if line[col] == "(":
@@ -586,7 +615,7 @@ class MicroThreadPoll:
                             elif line[col] == ")":
                                 parenteses -= 1
                             if line[col] == "," and parenteses == 1:
-                                commas.append({"row":row,"col":col})
+                                commas.append({"row":row, "col":col})
                                 if commas[0] == -1:
                                     commas[1] += 1
                                     args.append("")
@@ -594,8 +623,8 @@ class MicroThreadPoll:
                                     kwargs.append([""])
                             elif line[col] == "=" and parenteses == 1:
                                 if commas[0] == -1:
-                                    commas[0] = len(commas)-1
-                                    kwargs.append([args.pop(),""])
+                                    commas[0] = len(commas) - 1
+                                    kwargs.append([args.pop(), ""])
                                 else:
                                     kwargs[-1].append("")
                                 continue
@@ -612,8 +641,8 @@ class MicroThreadPoll:
                     if 'self' in args:
                         args.insert(0, args.pop(args.index("self")))
                     if not init:
-                        init = "".join([new_lines[fn[0][2][0]][:fn[0][2][1]],tab])
-                    s = ["def ",func_hash,"("]
+                        init = "".join([new_lines[fn[0][2][0]][:fn[0][2][1]], tab])
+                    s = ["def ", func_hash, "("]
                     s.extend(", ".join(args))
                     if kwargs:
                         s.extend(", ")
@@ -623,37 +652,37 @@ class MicroThreadPoll:
                         s.extend(",".join(magic))
                     s.extend("):\n")
                     if pyx_to_dll:
-                        allargs_vars = map(lambda arg:arg[0], kwargs)+args+banned_words
+                        allargs_vars = map(lambda arg:arg[0], kwargs) + args + banned_words
                         vars_used = filter(lambda argvar: argvar not in allargs_vars and argvar, set(vars_used))
-                        if vars_used: #If Cython..
+                        if vars_used:  # If Cython..
                             s.extend(init)
                             s.extend("global ")
                             s.extend(", ".join(vars_used))
                             s.extend("\n")
                     s.extend(init)
-                    s.extend("globals().update(microthread_globals)\n")
+                    s.extend("globals().update(microthread_globals)#It is cleaned at the next execution..\n")
                     s.extend(init)
                     s.extend("locals().update(microthread_locals)\n")
                     s.extend(init)
                     s.extend("del microthread_globals\n")
                     s.extend(init)
                     s.extend("del microthread_locals")
-                    #banned_words.extend(["globals","locals"])
-                    for row in range(fn[0][2][0]-1, fn[-1][2][0]):
+                    # banned_words.extend(["globals","locals"])
+                    for row in range(fn[0][2][0] - 1, fn[-1][2][0]):
                         line = list(new_lines[row][:])
-                        col_start  =  0
+                        col_start = 0
                         col_end = len(line)
                         s_modify = []
-                        if row == fn[0][2][0]-1:
+                        if row == fn[0][2][0] - 1:
                             col_start = fn[0][2][1]
-                        if row == fn[-1][2][0]-1:
-                            col_end = fn[-1][3][1]+1
+                        if row == fn[-1][2][0] - 1:
+                            col_end = fn[-1][3][1] + 1
                             s_modify = s
                             s = []
                         if not s_modify:
-                            s_modify = s[0:col_end-col_start]
-                            s = s[col_end-col_start:]
-                        to_modify[row] = to_modify.get(row, [])+[{
+                            s_modify = s[0:col_end - col_start]
+                            s = s[col_end - col_start:]
+                        to_modify[row] = to_modify.get(row, []) + [{
                                                                   "col": col_start,
                                                                   "end": col_end,
                                                                   "str":"".join(s_modify),
@@ -663,22 +692,22 @@ class MicroThreadPoll:
                     break
             else:
                 for fn in fn_names:
-                    at_init = (len(new_lines[fn[0][2][0]-1])-len(new_lines[fn[0][2][0]-1].lstrip())) == fn[0][2][1] and new_lines[fn[-1][2][0]-1][fn[-1][2][1]+1:] == ""
-                    fn_name = "".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(",")"), fn)))
-                    logging.debug("Detectado funcao: %s"%fn_name)
+                    at_init = (len(new_lines[fn[0][2][0] - 1]) - len(new_lines[fn[0][2][0] - 1].lstrip())) == fn[0][2][1] and new_lines[fn[-1][2][0] - 1][fn[-1][2][1] + 1:] == ""
+                    fn_name = "".join(map(lambda f:f[1], filter(lambda f: f[1] not in ("(", ")"), fn)))
+                    logging.debug("Detectado funcao: %s" % fn_name)
                     args = [""]
                     kwargs = []
-                    commas = [-1,0,{"row":fn[-2][2][0]-1,"col":fn[-2][2][1],"space":True}]
+                    commas = [-1, 0, {"row":fn[-2][2][0] - 1, "col":fn[-2][2][1], "space":True}]
                     parenteses = 1
-                    for row in range(fn[0][2][0]-1, fn[-1][2][0]):
+                    for row in range(fn[0][2][0] - 1, fn[-1][2][0]):
                         line = list(new_lines[row][:])
-                        col_start  =  0
+                        col_start = 0
                         col_real_start = 0
                         col_end = len(line)
-                        if row == fn[-2][2][0]-1:
-                            col_real_start = fn[-2][2][1]+1
+                        if row == fn[-2][2][0] - 1:
+                            col_real_start = fn[-2][2][1] + 1
                             col_start = fn[0][2][1]
-                        if row == fn[-1][2][0]-1:
+                        if row == fn[-1][2][0] - 1:
                             col_end = fn[-1][2][1]
                         for col in range(col_real_start, col_end):
                             if line[col] == "(":
@@ -686,7 +715,7 @@ class MicroThreadPoll:
                             elif line[col] == ")":
                                 parenteses -= 1
                             if line[col] == "," and parenteses == 1:
-                                commas.append({"row":row,"col":col})
+                                commas.append({"row":row, "col":col})
                                 if commas[0] == -1:
                                     commas[1] += 1
                                     args.append("")
@@ -694,8 +723,8 @@ class MicroThreadPoll:
                                     kwargs.append([""])
                             elif line[col] == "=" and parenteses == 1:
                                 if commas[0] == -1:
-                                    commas[0] = len(commas)-1
-                                    kwargs.append([args.pop(),""])
+                                    commas[0] = len(commas) - 1
+                                    kwargs.append([args.pop(), ""])
                                 else:
                                     kwargs[-1].append("")
                                 continue
@@ -708,9 +737,9 @@ class MicroThreadPoll:
                     kwargs = filter(lambda arg: arg[1:], kwargs)
                     kwargs = map(lambda arg:[arg[0].strip(), arg[1]], kwargs)
                     args = map(lambda arg:arg.strip(), args)
-                    s =  [["(",""][at_init],"yield MicroThreadSignals.CALL_FUNCTION, ",fn_name,", ["]
-                    more_args = filter(lambda arg: arg.startswith("*") and arg.count("*") == 1,[args, map(lambda arg:arg[0],kwargs)][kwargs != []])
-                    more_kwargs = filter(lambda arg: arg.startswith("**") and arg.count("*") == 2,[args, map(lambda arg:arg[0],kwargs)][kwargs != []])
+                    s = [["(", ""][at_init], "yield MicroThreadSignals.CALL_FUNCTION, ", fn_name, ", ["]
+                    more_args = filter(lambda arg: arg.startswith("*") and arg.count("*") == 1, [args, map(lambda arg:arg[0], kwargs)][kwargs != []])
+                    more_kwargs = filter(lambda arg: arg.startswith("**") and arg.count("*") == 2, [args, map(lambda arg:arg[0], kwargs)][kwargs != []])
                     if more_kwargs:
                         more_kwargs = more_kwargs[0]
                         if kwargs != []:
@@ -727,28 +756,28 @@ class MicroThreadPoll:
                             args.remove(more_args)
                     else:
                         more_args = ""
-                    s.extend([", ".join(args),"]"])
+                    s.extend([", ".join(args), "]"])
                     if more_args:
-                        s.extend(["+",more_args[1:]])
+                        s.extend(["+", more_args[1:]])
                     s.extend(", ")
-                    s.extend([["dict(list(dict(",""][more_kwargs == ""],"{"])
-                    s.extend(", ".join(map(lambda i: "".join(["'",i[0],"': ",i[1]]), kwargs)))
-                    s.extend(["}",["".join([").items())+list(dict(",more_kwargs[2:],").items()))"]),""][more_kwargs==""],[")",""][at_init]])
-                    for row in range(fn[0][2][0]-1, fn[-1][2][0]):
+                    s.extend([["dict(list(dict(", ""][more_kwargs == ""], "{"])
+                    s.extend(", ".join(map(lambda i: "".join(["'", i[0], "': ", i[1]]), kwargs)))
+                    s.extend(["}", ["".join([").items())+list(dict(", more_kwargs[2:], ").items()))"]), ""][more_kwargs == ""], [")", ""][at_init]])
+                    for row in range(fn[0][2][0] - 1, fn[-1][2][0]):
                         line = list(new_lines[row][:])
-                        col_start  =  0
+                        col_start = 0
                         col_end = len(line)
                         s_modify = []
-                        if row == fn[0][2][0]-1:
+                        if row == fn[0][2][0] - 1:
                             col_start = fn[0][2][1]
-                        if row == fn[-1][2][0]-1:
+                        if row == fn[-1][2][0] - 1:
                             col_end = fn[-1][3][1]
                             s_modify = s
                             s = []
                         if not s_modify:
-                            s_modify = s[0:col_end-col_start]
-                            s = s[col_end-col_start:]
-                        to_modify[row] = to_modify.get(row, [])+[{
+                            s_modify = s[0:col_end - col_start]
+                            s = s[col_end - col_start:]
+                        to_modify[row] = to_modify.get(row, []) + [{
                                                                   "col": col_start,
                                                                   "end": col_end,
                                                                   "str":"".join(s_modify),
@@ -756,31 +785,31 @@ class MicroThreadPoll:
                                                                   }]
                     break
             for line_number, changes in to_modify.iteritems():
-                logging.debug("Atualizando linha %d"%line_number)
+                logging.debug("Atualizando linha %d" % line_number)
                 line = list(new_lines[line_number])
-                changes = sorted(changes,key=lambda l:l["col"])
+                changes = sorted(changes, key=lambda l:l["col"])
                 to_add = 0
                 for change in changes:
-                    if change.get("modify",False) and not change.get("end",False):
-                        line[change["col"]+to_add] = change["str"]
-                    elif change.get("modify",False) and change.get("end",False):
-                        line[change["col"]+to_add:change["end"]+to_add] = change["str"]
-                        to_add += len(change["str"])-((change["end"]+to_add)-(change["col"]+to_add))
+                    if change.get("modify", False) and not change.get("end", False):
+                        line[change["col"] + to_add] = change["str"]
+                    elif change.get("modify", False) and change.get("end", False):
+                        line[change["col"] + to_add:change["end"] + to_add] = change["str"]
+                        to_add += len(change["str"]) - ((change["end"] + to_add) - (change["col"] + to_add))
                     else:
-                        line.insert(change["col"]+to_add, change["str"])
+                        line.insert(change["col"] + to_add, change["str"])
                         to_add += 1
-                logging.debug("Houve %d modificacoes na linha %d"%(to_add, line_number))
+                logging.debug("Houve %d modificacoes na linha %d" % (to_add, line_number))
                 new_lines[line_number] = "".join(line)
             new_lines = "\n".join(new_lines).split("\n")
-        new_lines.append("".join([func_hash,".__name__ = '",func_name,"'"]))
-        new_lines.append("".join([func_hash,".__doc__ = '",getattr(func, "__doc__",None) or "","'"]))
+        new_lines.append("".join([func_hash, ".__name__ = '", func_name, "'"]))
+        new_lines.append("".join([func_hash, ".__doc__ = '", getattr(func, "__doc__", None) or "", "'"]))
         if pyx_to_dll != None:
             new_lines.insert(0, "import cython")
         logging.info("Gerando nova funcao")
         MicroThreadPoll.codes[parseFuncs][func_hash] = "\n".join(new_lines)
         return MicroThreadPoll.codes[parseFuncs][func_hash] 
     @staticmethod
-    def parseAndExecute(thread, parseFuncs = False, repeatCompile = 10, intervalCompile = 0.5):
+    def parseAndExecute(thread, parseFuncs=False, repeatCompile=10, intervalCompile=0.5):
         func_hash = MicroThreadPoll.getHash(thread)
         func = MicroThreadPoll.getFunction(thread)
         parseFuncs = getattr(func, "microThread_parseFuncs", parseFuncs)
@@ -791,28 +820,29 @@ class MicroThreadPoll:
             return MicroThreadPoll.funcs[parseFuncs][func_hash]
         if MicroThreadPoll.temp_dir:
             func_files = os.listdir(MicroThreadPoll.temp_dir)
-            func_module_path = "_".join(func.__module__.split(".")+[func.__name__, md5(sys.version).hexdigest()])
+            func_module_path = "_".join(func.__module__.split(".") + [func.__name__, md5(sys.version).hexdigest()])
             func_todelete = []
             for func_file in func_files:
                 func_file = os.path.join(MicroThreadPoll.temp_dir, func_file)
                 if func_module_path in func_file and func_hash not in func_file:
                     func_todelete.append(func_file)
             map(os.remove, func_todelete)
-            func_module = "_".join([func_module_path,str(parseFuncs),func_hash])
-            func_path = os.path.join(MicroThreadPoll.temp_dir, ".".join([func_module,"py"]))
+            func_module_name = "_".join([func_module_path, str(parseFuncs), func_hash])
+            func_path = os.path.join(MicroThreadPoll.temp_dir, ".".join([func_module_name, "py"]))
             if not os.path.exists(func_path):
                 code = MicroThreadPoll.parse(thread, parseFuncs)
                 arq = open(func_path, "w+")
                 arq.write(code)
                 arq.close()
-            func_module = __import__(func_module, {}, {}, [func_hash], 0)
+            func_searched_module = imp.find_module(func_module_name, [MicroThreadPoll.temp_dir])
+            func_module = imp.load_module(func_module_name, *func_searched_module)
             localVars = {}
-            localVars[func_hash] =  getattr(func_module, func_hash)
+            localVars[func_hash] = getattr(func_module, func_hash)
             if pyx_to_dll and "<cyfunction" not in repr(localVars[func_hash]) and repeatCompile > 0:
                 for _ in xrange(repeatCompile):
                     try:
-                        pyx_to_dll(func_path, build_in_temp = True, inplace = True, reload_support=False)
-                        func_module = reload(func_module)
+                        pyx_to_dll(func_path, build_in_temp=True, inplace=True, reload_support=False)
+                        func_module = imp.load_module(func_module_name, *func_searched_module)
                         break
                     except:
                         pass
@@ -831,11 +861,11 @@ class MicroThreadPoll:
             compiled_code = compile(code, "module.py", "exec")
             logging.info("Executando codigo")
             localVars = {}
-            exec compiled_code in {},localVars
+            exec compiled_code in {}, localVars
         if inspect.ismethod(func):
             localVars[func_hash] = types.MethodType(localVars[func_hash], func.im_self, func.im_class)
-        #localVars[func_hash].__name__ = func_name
-        #localVars[func_hash].__doc__ = func.__doc__
+        # localVars[func_hash].__name__ = func_name
+        # localVars[func_hash].__doc__ = func.__doc__
         logging.debug("Cacheando funcao")
         MicroThreadPoll.funcs[parseFuncs][func_hash] = localVars[func_hash]
         return localVars[func_hash] 
@@ -856,21 +886,21 @@ class MicroThreadPoll:
             putTask = MicroThreadPoll.tasks.put_nowait
             n = 0
             while not poll.stopFlag:
-                poll.suspendFlag.wait() #Wait if suspended
-                task = getTask() #Get an task from the queue, blocking if needed
-                if task in MicroThreadPoll.to_remove: #Detect if it's in the iterator
+                poll.suspendFlag.wait()  # Wait if suspended
+                task = getTask()  # Get an task from the queue, blocking if needed
+                if task in MicroThreadPoll.to_remove:  # Detect if it's in the iterator
                     if n > 3:
-                        MicroThreadPoll.to_remove = list(MicroThreadPoll.to_remove) #It need to be transformed in a list why::::It can slow the performance..=P    
+                        MicroThreadPoll.to_remove = list(MicroThreadPoll.to_remove)  # It need to be transformed in a list why::::It can slow the performance..=P    
                         n = 0
                     n += 1
-                    MicroThreadPoll.to_remove = (a_task for a_task in MicroThreadPoll.to_remove if a_task !=task) #Generator Expressions <3
-                    continue #If removed, this cannot be executed!
-                taskDone() #If anyone need to know when the tasks terminated xD
+                    MicroThreadPoll.to_remove = (a_task for a_task in MicroThreadPoll.to_remove if a_task != task)  # Generator Expressions <3
+                    continue  # If removed, this cannot be executed!
+                taskDone()  # If anyone need to know when the tasks terminated xD
                 try:
-                    task() #It's just the next method! 
+                    task()  # It's just the next method! 
                 except StopIteration:
-                    continue #'Remove' the item from the queue, just to not process this task in the next loop
-                putTask(task) #Add the task to the end of the queue, to continue in a next loop
+                    continue  # 'Remove' the item from the queue, just to not process this task in the next loop
+                putTask(task)  # Add the task to the end of the queue, to continue in a next loop
             poll.stopFlag = True
         if self.isThread():
             self.thread = threading.Thread(target=run)
@@ -882,7 +912,6 @@ class MicroThreadPoll:
     def getInstance(threaded=True):
         if not MicroThreadPoll.instance:
             MicroThreadPoll.temp_dir = "./cache/"
-            sys.path.append(MicroThreadPoll.temp_dir)
             logging.info("Iniciando Polls")
             MicroThreadPoll.instance = []
             cpu_count = 1
@@ -892,14 +921,14 @@ class MicroThreadPoll:
                         cpu_count = multiprocessing.cpu_count()
                     except NotImplementedError:
                         pass
-                elif hasattr(os,"sysconf"):
+                elif hasattr(os, "sysconf"):
                     try:
                         cpu_count = os.sysconf("SC_NPROCESSORS_CONF")
                     except ValueError:
                         pass
             elif threaded > 1:
                 cpu_count = threaded
-            logging.info("Abrindo %d %s"%(cpu_count,["polls","threads"][threaded is not False]))
+            logging.info("Abrindo %d %s" % (cpu_count, ["polls", "threads"][threaded is not False]))
             for _ in xrange(cpu_count):
                 poll = MicroThreadPoll()
                 poll.setThread(threaded is not False)
@@ -945,34 +974,34 @@ class MicroThread(object):
         self.callbacks = dict.fromkeys(MicroThreadCallbacksMode, [])
         if callable(kwargs.get("microThread_callback")):
             self.callbacks[MicroThreadCallbacksMode.ALL].append(kwargs.pop("microThread_callback"))
-        self.parseFuncs = kwargs.pop("microThread_parseFuncs",True)
-        self.repeatCompile = kwargs.pop("microThread_repeatCompile",10)
-        self.intervalCompile = kwargs.pop("microThread_intervalCompile",0.1)
+        self.parseFuncs = kwargs.pop("microThread_parseFuncs", True)
+        self.repeatCompile = kwargs.pop("microThread_repeatCompile", 10)
+        self.intervalCompile = kwargs.pop("microThread_intervalCompile", 0.1)
         self.localVars = {}
         self.localVars.update(locals().copy())
-        self.globalVars = {}
+        self.globalVars = {"MicroThreadSignals":MicroThreadSignals}
         self.globalVars.update(globals().copy())
         self.globalVars.update(sys.modules)
         for n in range(0, 100):
             try:
-                f = sys._getframe( n )
+                f = sys._getframe(n)
             except ValueError:
                 break
             self.localVars.update(f.f_locals)
             self.globalVars.update(f.f_globals)
         self.globalVars.update({self.run.__name__: self.run})
         self.globalVars.update(self.run.func_globals)
-        self.globalVars.update(getattr(self.run,"microThread_globals", {}))
+        self.globalVars.update(getattr(self.run, "microThread_globals", {}))
         self.args = args[1:]
         self.kwArgs = kwargs
-        self.run_modified = MicroThreadPoll.parseAndExecute(self, self.parseFuncs, self.repeatCompile, self.intervalCompile) #Parses, and executes, the code function, caching this in MicroThreadPoll.tempdir to allow compile with Cython, Jython and etc
-        self.instance = None #It's not initiated after .start() call
-        self.result = Queue.Queue() #A Queue to save the results from the MicroThread
+        self.run_modified = MicroThreadPoll.parseAndExecute(self, self.parseFuncs, self.repeatCompile, self.intervalCompile)  # Parses, and executes, the code function, caching this in MicroThreadPoll.tempdir to allow compile with Cython, Jython and etc
+        self.instance = None  # It's not initiated after .start() call
+        self.result = Queue.Queue()  # A Queue to save the results from the MicroThread
     def isInPoll(self):
         return self.instance is not None
     def start(self):
         self.instance = MicroThreadPoll.execute(self, self.localVars, self.globalVars, self.args, self.kwArgs)
-    def addCallback(self, fn, mode = MicroThreadCallbacksMode.ALL):
+    def addCallback(self, fn, mode=MicroThreadCallbacksMode.ALL):
         self.callbacks[mode].append(fn)
     def setPriority(self, priority):
         if not self.isInPoll():
@@ -1063,7 +1092,7 @@ class MicroThread(object):
             raise Exception("Can't wait a microthread with the process not running")
             return False
         return self.instance.waitResult(oldResult, send)
-#class OrderedPrint(MicroThread):
+# class OrderedPrint(MicroThread):
 #    def __init__(self):
 #        super(OrderedPrint, self).__init__(microThread_parseFuncs=False)
 #        self.messages = Queue.Queue()
@@ -1116,11 +1145,11 @@ class OrderedPrint:
         self.stdout = sys.stdout
     @microThreadParseFuncsDisable
     def write(self, msg):
-        #self.lock.acquire()
+        # self.lock.acquire()
         self.logger.debug("Adicionando mensagem ao buffer...")
-        #self.messages.put_nowait(str(msg).strip())
+        # self.messages.put_nowait(str(msg).strip())
         self.stdout.write(msg)
-        #self.lock.release()
+        # self.lock.release()
     def install(self):
         self.logger.info("Instalando OrderedPrint..")
         sys.stdout = self
@@ -1129,29 +1158,29 @@ class OrderedPrint:
         sys.stdout = self.stdout
     @staticmethod
     def getInstance():
-        if not hasattr(OrderedPrint,"instance"):
+        if not hasattr(OrderedPrint, "instance"):
             OrderedPrint.instance = OrderedPrint()
-            #OrderedPrint.instance.start()
+            # OrderedPrint.instance.start()
         return OrderedPrint.instance
 
 def microThreadDecorator(fn):
     def microThread(*args, **kwargs):
         if not kwargs.pop("microThread_enable", True):
             return fn(*args, **kwargs)
-        async = kwargs.pop("microThread_async", True) #Defines if it's async..
+        async = kwargs.pop("microThread_async", True)  # Defines if it's async..
         autoStart = kwargs.pop("microThread_autoStart", True)
-        m = MicroThread(fn, *args, **kwargs) #Create a MicroThread..
+        m = MicroThread(fn, *args, **kwargs)  # Create a MicroThread..
         if async:
-            if autoStart: #If it can auto-start!
-                m.start()#It auto start!
+            if autoStart:  # If it can auto-start!
+                m.start()  # It auto start!
             return m
         else:
-            m.start() #Start if not async (it need to be started to await a result)
-            return m.waitResult() #Await a result 
+            m.start()  # Start if not async (it need to be started to await a result)
+            return m.waitResult()  # Await a result 
     microThread.__name__ = fn.__name__
     microThread.oldFunc = fn
     microThread.microThreadDecorated = True
-    MicroThreadPoll.parse(fn, True) #Just a memory cache
-    MicroThreadPoll.parse(fn, False) #Just a memory cache
+    MicroThreadPoll.parse(fn, True)  # Just a memory cache
+    MicroThreadPoll.parse(fn, False)  # Just a memory cache
     return microThread
         
