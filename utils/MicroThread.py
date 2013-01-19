@@ -1,4 +1,4 @@
-import inspect, tokenize, itertools, threading, string, random, sys, os, time, re, logging as _logging, imp, Queue, types, atexit, __builtin__, shutil
+import inspect, tokenize, itertools, threading, sys, os, time, logging as _logging, imp, Queue, types, __builtin__, shutil
 try:
     from hashlib import md5
 except ImportError:
@@ -1163,24 +1163,24 @@ class OrderedPrint:
             # OrderedPrint.instance.start()
         return OrderedPrint.instance
 
-def microThreadDecorator(fn):
-    def microThread(*args, **kwargs):
+def microThreadDecorator(function):
+    def micro_thread(*args, **kwargs):
         if not kwargs.pop("microThread_enable", True):
             return fn(*args, **kwargs)
         async = kwargs.pop("microThread_async", True)  # Defines if it's async..
         autoStart = kwargs.pop("microThread_autoStart", True)
-        m = MicroThread(fn, *args, **kwargs)  # Create a MicroThread..
+        theMicroThread = MicroThread(function, *args, **kwargs)  # Create a MicroThread..
         if async:
             if autoStart:  # If it can auto-start!
-                m.start()  # It auto start!
-            return m
+                theMicroThread.start()  # It auto start!
+            return theMicroThread
         else:
-            m.start()  # Start if not async (it need to be started to await a result)
-            return m.waitResult()  # Await a result 
-    microThread.__name__ = fn.__name__
-    microThread.oldFunc = fn
-    microThread.microThreadDecorated = True
-    MicroThreadPoll.parse(fn, True)  # Just a memory cache
-    MicroThreadPoll.parse(fn, False)  # Just a memory cache
-    return microThread
+            theMicroThread.start()  # Start if not async (it need to be started to await a result)
+            return theMicroThread.waitResult()  # Await a result 
+    micro_thread.__name__ = function.__name__
+    micro_thread.oldFunc = function
+    micro_thread.microThreadDecorated = True
+    MicroThreadPoll.parse(function, True)  # Just a memory cache
+    MicroThreadPoll.parse(function, False)  # Just a memory cache
+    return micro_thread
         
