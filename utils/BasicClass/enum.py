@@ -7,7 +7,7 @@ from utils import functools
 from BaseUtils import BaseUtils
 import logging as _logging, inspect
 logging = _logging.getLogger("enum")
-#enum
+# enum
 class EnumVal:
     def __init__(self, parent, name):
         self.__classname = parent
@@ -30,7 +30,7 @@ class EnumVal:
             return -1 
         return cmp(str(self), str(other)) or cmp(int(self), int(other))
     def __hash__(self):
-        return hash(str(self)+str(int(self)))
+        return hash(str(self) + str(int(self)))
     def __delattr__(self, key):
         raise Exception("Cannot modify a ENUM value")
     def __setitem__(self, name, val):
@@ -59,14 +59,14 @@ class EnumType(type):
     def __new__(cls, cls_name, cls_parents, cls_attrs):     
         logging.info("Detectando aspectos do ENUM")
         def applyToClass(name, attrs):
-            logging.debug("Escaneando classe %s"%name)
+            logging.debug("Escaneando classe %s" % name)
             for key, val in attrs.iteritems():
                 if key.startswith("__"):
                     continue
                 if inspect.isclass(val) and "enum" in val.__bases__:
                     applyToClass(".".join([name, key]), val.__dict__)
                 else:
-                    logging.debug("Alterando atributo %s para ENUM"%key)
+                    logging.debug("Alterando atributo %s para ENUM" % key)
                     attrs[key] = EnumVal(name, key)
             attrs["__init__"] = BaseUtils.getConstructor("enum")
             return attrs

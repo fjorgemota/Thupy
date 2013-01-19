@@ -1,10 +1,12 @@
 from utils.BasicClass import interface
 class BaseSocket(interface):
     '''Base Class to all sockets from the Thupy Server'''
+    def __init__(self, sock=None):
+        '''Initialize the socket'''
     def write(self, msg):
         '''Write a message to the socket and return the bytes sended'''
         pass
-    def read(self, buf=-1):
+    def read(self, buf= -1):
         '''Read a determinated message with a determinated length from the socket'''
         pass
     def close(self):

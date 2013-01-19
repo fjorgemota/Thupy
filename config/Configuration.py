@@ -8,7 +8,7 @@ class ConfigurationOption(ActiveRecord):
             self.key = args[0]
             if args[1:]:
                 self.setValue(args[1])
-    #Actions
+    # Actions
     def load(self):
         if not self.section:
             raise Exception("Set a section to this option")
@@ -52,9 +52,9 @@ class ConfigurationOption(ActiveRecord):
         self.key = new_key
     def setValue(self, new_value):
         try:
-            self.value = eval(new_value,{"__builtins__":None,"False":False,"True":True},{}) #Safely execute
+            self.value = eval(new_value, {"__builtins__":None, "False":False, "True":True}, {})  # Safely execute
         except:
-            #If it's just a String
+            # If it's just a String
             self.value = new_value
     
     # setRow 
@@ -66,7 +66,7 @@ class ConfigurationOption(ActiveRecord):
     
     # toArray 
     def toArray(self):
-        result={}
+        result = {}
         result['section'] = self.section
         result['key'] = self.key
         result['value'] = self.value
@@ -151,7 +151,7 @@ class ConfigurationSection(ActiveRecord):
     
     # toArray 
     def toArray(self):
-        result={}
+        result = {}
         result['parent'] = self.parent
         result['name'] = self.name
         return result
@@ -179,7 +179,7 @@ class ConfigurationSection(ActiveRecord):
         return self.options
     def getSections(self):
         return self.sections
-    def toDict(self, include_options = True, include_sections = True, raw_values=False):
+    def toDict(self, include_options=True, include_sections=True, raw_values=False):
         result = {}
         if include_options:
             opts = {}
@@ -198,12 +198,12 @@ class ConfigurationSection(ActiveRecord):
             else:
                 for section in self.sections:
                     sects[section.getName()] = section
-            result["sections"]  = sects
+            result["sections"] = sects
         if include_options and include_sections:
             return result
         if not result:
             return result
-        return result[["options","sections"][include_sections]]
+        return result[["options", "sections"][include_sections]]
 class ConfigurationFile(ConfigParser.ConfigParser):
     def __init__(self, filename, section=None):
         ConfigParser.ConfigParser.__init__(self)
@@ -264,7 +264,7 @@ class ConfigurationFile(ConfigParser.ConfigParser):
         arq = open(filename, "w+")
         self._config.write(arq)
         arq.close()
-    def toDict(self, include_options=True, include_subcategories=True, raw_values = False):
+    def toDict(self, include_options=True, include_subcategories=True, raw_values=False):
         result = {}
         if raw_values:
             for sect in self.sections:
@@ -312,7 +312,7 @@ class Configuration:
         if not self.files.has_key(filename):
             self.files[filename] = ConfigurationFile(filename, section)
         return self.files[filename] 
-    def getPath(self, path="", default = None, original_parent=None):
+    def getPath(self, path="", default=None, original_parent=None):
         path = path.split("/")
         if not original_parent:
             original_parent = None

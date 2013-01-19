@@ -5,7 +5,7 @@ Created on 28/12/2012
 '''
 import sys, logging, unittest, os
 logging.basicConfig(level=logging.INFO)
-sys.path.insert(0, os.path.realpath(os.path.join(os.getcwd(), "..","..")))
+sys.path.insert(0, os.path.realpath(os.path.join(os.getcwd(), "..", "..")))
 from utils.PackageManager import *
 class TestDjango(unittest.TestCase):
     def test_installLastestVersion(self):

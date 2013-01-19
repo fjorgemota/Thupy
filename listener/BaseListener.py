@@ -9,7 +9,7 @@ class BaseListener(interface, Thread):
     '''Thread that dispatches socket events sync and asyncronously in real time'''
     def __init__(self):
         '''Constructs the listener, initializing variables such as readed sockets, writed sockets and etc...'''
-        super(BaseListener, self).__init__() #Initializes the thread
+        super(BaseListener, self).__init__()  # Initializes the thread
     def poll(self):
         '''Returns a iterable with sockets that have events to read and write'''
         pass
@@ -30,7 +30,7 @@ class BaseListener(interface, Thread):
         pass
     def getTimeout(self):
         '''Return the timeout between loops of this listener'''
-    def setTimeout(self, timeout=-1):
+    def setTimeout(self, timeout= -1):
         '''Set the timeout between loops of this listener'''    
     def run(self):
         '''Run the thread listener in a separate thread, and send the data to other channels (if not sync)'''

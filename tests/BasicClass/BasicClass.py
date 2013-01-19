@@ -1,5 +1,5 @@
 import unittest, sys, os
-sys.path.insert(0, os.path.realpath(os.path.join(os.getcwd(),"../../")))
+sys.path.insert(0, os.path.realpath(os.path.join(os.getcwd(), "../../")))
 from utils.BasicClass import *
 class ConstructorEmpty(abstract):
     @abstractFn
